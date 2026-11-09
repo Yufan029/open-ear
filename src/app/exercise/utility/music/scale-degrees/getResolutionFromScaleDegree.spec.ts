@@ -1,5 +1,8 @@
 import { testPureFunction } from '../../../../shared/testing-utility/testPureFunction';
-import { getResolutionFromScaleDegree } from './getResolutionFromScaleDegree';
+import {
+  getResolutionFromScaleDegree,
+  isResolutionUp,
+} from './getResolutionFromScaleDegree';
 
 /**
  * General rules:
@@ -26,6 +29,95 @@ describe('getResolutionFromScaleDegree', function () {
     {
       args: ['b3', ['1', '2', '3', 'b3'], 'I IV V I'],
       returnValue: ['b3', '3', '2', '1'], // blues is implied
+    },
+    {
+      args: [
+        'b3',
+        ['1', '2', '3', 'b3'],
+        'I IV V I',
+        { resolveMeAndRaDirectly: true },
+      ],
+      returnValue: ['b3', '2', '1'],
+    },
+    {
+      args: [
+        'b3',
+        ['1', '2', '3', 'b3'],
+        'i iv V i',
+        { resolveMeAndRaDirectly: true },
+      ],
+      returnValue: ['b3', '2', '1'],
+    },
+    {
+      args: [
+        '3',
+        ['1', '2', '3', 'b3'],
+        'I IV V I',
+        { resolveMeAndRaDirectly: true },
+      ],
+      returnValue: ['3', '2', '1'], // only affects b3 and b2
+    },
+    // Ra
+    {
+      args: ['b2', ['1', '2', 'b2'], 'I IV V I'],
+      returnValue: ['b2', '2', '1'],
+    },
+    {
+      args: [
+        'b2',
+        ['1', '2', 'b2'],
+        'I IV V I',
+        { resolveMeAndRaDirectly: true },
+      ],
+      returnValue: ['b2', '1'],
+    },
+    {
+      args: [
+        'b2',
+        ['1', 'b2', '3'],
+        'I IV V I',
+        { resolveMeAndRaDirectly: true },
+      ],
+      returnValue: ['b2', '1'], // without the option there's no resolution here
+    },
+    {
+      args: [
+        'b2',
+        ['1', '2', 'b3', '3', 'b2'],
+        'i iv V i',
+        { resolveMeAndRaDirectly: true },
+      ],
+      returnValue: ['b2', '1'],
+    },
+    {
+      args: [
+        '2',
+        ['1', '2', 'b2'],
+        'I IV V I',
+        { resolveMeAndRaDirectly: true },
+      ],
+      returnValue: ['2', '1'],
+    },
+    // Fi
+    {
+      args: ['#4', ['1', '#4'], 'I IV V I', { resolveFiUp: true }],
+      returnValue: ['#4', '5', '6', '7', '1'],
+    },
+    {
+      args: ['#4', ['1', '#4', '4'], 'I IV V I', { resolveFiUp: true }],
+      returnValue: ['#4', '5', '6', '7', '1'],
+    },
+    {
+      args: ['#4', ['1', '#4', 'b6'], 'i iv V i', { resolveFiUp: true }],
+      returnValue: ['#4', '5', 'b6', '7', '1'],
+    },
+    {
+      args: ['#4', ['1', '#4', 'b6', 'b7'], 'i iv V i', { resolveFiUp: true }],
+      returnValue: ['#4', '5', 'b6', 'b7', '1'],
+    },
+    {
+      args: ['4', ['1', '#4', '4'], 'I IV V I', { resolveFiUp: true }],
+      returnValue: ['4', '3', '2', '1'], // only affects #4
     },
     {
       args: ['b3', ['1', '2', 'b3'], 'I IV V I'],
@@ -91,5 +183,17 @@ describe('getResolutionFromScaleDegree', function () {
       args: ['5', ['5', '6', 'b7'], 'I IV V I'],
       returnValue: ['5', '6', 'b7', '1'],
     },
+  ]);
+});
+
+describe('isResolutionUp', function () {
+  testPureFunction(isResolutionUp, [
+    { args: ['1'], returnValue: false },
+    { args: ['4'], returnValue: false },
+    { args: ['5'], returnValue: true },
+    { args: ['b7'], returnValue: true },
+    { args: ['#4'], returnValue: false },
+    { args: ['#4', { resolveFiUp: true }], returnValue: true },
+    { args: ['4', { resolveFiUp: true }], returnValue: false },
   ]);
 });

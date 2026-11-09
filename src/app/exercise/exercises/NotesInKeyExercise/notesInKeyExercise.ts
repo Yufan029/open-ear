@@ -7,9 +7,9 @@ import {
   NotesRange,
   ScaleDegree,
   SolfegeNote,
-  getDiatonicScaleDegreeWithAccidental,
   getResolutionFromScaleDegree,
   getScaleDegreeFromNote,
+  isResolutionUp,
   randomFromList,
   scaleDegreeToSolfegeNote,
   solfegeNoteToScaleDegree,
@@ -93,6 +93,8 @@ export type NoteInKeySettings = IncludedAnswersSettings<SolfegeNote> &
   PlayAfterCorrectAnswerSetting &
   CadenceTypeSetting & {
     notesRange: 'high' | 'middle' | 'bass' | 'contrabass';
+    resolveMeAndRaDirectly: boolean;
+    resolveFiUp: boolean;
     numberOfVoices: 1 | 2 | 3;
     harmonicIntervals: DiatonicIntervalCode[];
     melodicIntervals: DiatonicIntervalCode[];
@@ -138,6 +140,8 @@ export const notesInKeyExercise: Exercise<SolfegeNote, NoteInKeySettings> = {
       numberOfSegments: 1,
       numberOfVoices: 1,
       playAfterCorrectAnswer: true,
+      resolveMeAndRaDirectly: false,
+      resolveFiUp: false,
       notesRange: 'middle',
       displayMode: 'numeral',
       rhythmicValues: ['2n'],
@@ -239,6 +243,30 @@ export const notesInKeyExercise: Exercise<SolfegeNote, NoteInKeySettings> = {
         show: (settings: NoteInKeySettings) =>
           settings.numberOfSegments === 1 && settings.numberOfVoices === 1,
       }),
+      {
+        key: 'resolveMeAndRaDirectly',
+        show: (settings: NoteInKeySettings) =>
+          settings.numberOfSegments === 1 &&
+          settings.numberOfVoices === 1 &&
+          settings.playAfterCorrectAnswer,
+        info: 'When checked, <b>Me</b> resolves directly down (Me Re Do) and <b>Ra</b> resolves directly to Do (Ra Do), instead of going through Mi and Re.',
+        descriptor: {
+          controlType: 'checkbox',
+          label: 'Resolve Me and Ra directly',
+        },
+      },
+      {
+        key: 'resolveFiUp',
+        show: (settings: NoteInKeySettings) =>
+          settings.numberOfSegments === 1 &&
+          settings.numberOfVoices === 1 &&
+          settings.playAfterCorrectAnswer,
+        info: 'When checked, <b>Fi</b> resolves up to the high Do (Fi Sol La Ti Do) instead of down.',
+        descriptor: {
+          controlType: 'checkbox',
+          label: 'Resolve Fi up to high Do',
+        },
+      },
     ],
   },
   logic: (settings) => ({
@@ -336,6 +364,10 @@ export const notesInKeyExercise: Exercise<SolfegeNote, NoteInKeySettings> = {
                   (solfege) => solfegeNoteToScaleDegree[solfege],
                 ),
                 settings.cadenceType,
+                {
+                  resolveMeAndRaDirectly: settings.resolveMeAndRaDirectly,
+                  resolveFiUp: settings.resolveFiUp,
+                },
               );
             const resolutionInNoteTypes: NoteType[] =
               resolutionInScaleDegrees.map((scaleDegree) =>
@@ -350,8 +382,9 @@ export const notesInKeyExercise: Exercise<SolfegeNote, NoteInKeySettings> = {
              * (It's not ideal that this needs to be done manually. We should reconsider this)
              * */
             if (
-              getDiatonicScaleDegreeWithAccidental(scaleDegree)
-                .diatonicScaleDegree >= 5
+              isResolutionUp(scaleDegree, {
+                resolveFiUp: settings.resolveFiUp,
+              })
             ) {
               resolution[resolution.length - 1] = transpose(
                 resolution[resolution.length - 1],

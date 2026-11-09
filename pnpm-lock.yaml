@@ -114,7 +114,7 @@ importers:
         specifier: ^0.31.0
         version: 0.31.3
       tone:
-        specifier: ^14.7.77
+        specifier: 14.7.77
         version: 14.7.77
       ts-fsrs:
         specifier: ^5.2.1

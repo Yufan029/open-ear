@@ -1,0 +1,318 @@
+diff --git a/src/app/exercise/exercises/NotesInKeyExercise/notesInKeyExercise.ts b/src/app/exercise/exercises/NotesInKeyExercise/notesInKeyExercise.ts
+index aab144d..7caf3e2 100644
+--- a/src/app/exercise/exercises/NotesInKeyExercise/notesInKeyExercise.ts
++++ b/src/app/exercise/exercises/NotesInKeyExercise/notesInKeyExercise.ts
+@@ -7,9 +7,9 @@ import {
+   NotesRange,
+   ScaleDegree,
+   SolfegeNote,
+-  getDiatonicScaleDegreeWithAccidental,
+   getResolutionFromScaleDegree,
+   getScaleDegreeFromNote,
++  isResolutionUp,
+   randomFromList,
+   scaleDegreeToSolfegeNote,
+   solfegeNoteToScaleDegree,
+@@ -93,7 +93,8 @@ export type NoteInKeySettings = IncludedAnswersSettings<SolfegeNote> &
+   PlayAfterCorrectAnswerSetting &
+   CadenceTypeSetting & {
+     notesRange: 'high' | 'middle' | 'bass' | 'contrabass';
+-    resolveFlatThirdDirectly: boolean;
++    resolveMeAndRaDirectly: boolean;
++    resolveFiUp: boolean;
+     numberOfVoices: 1 | 2 | 3;
+     harmonicIntervals: DiatonicIntervalCode[];
+     melodicIntervals: DiatonicIntervalCode[];
+@@ -139,7 +140,8 @@ export const notesInKeyExercise: Exercise<SolfegeNote, NoteInKeySettings> = {
+       numberOfSegments: 1,
+       numberOfVoices: 1,
+       playAfterCorrectAnswer: true,
+-      resolveFlatThirdDirectly: false,
++      resolveMeAndRaDirectly: false,
++      resolveFiUp: false,
+       notesRange: 'middle',
+       displayMode: 'numeral',
+       rhythmicValues: ['2n'],
+@@ -242,15 +244,27 @@ export const notesInKeyExercise: Exercise<SolfegeNote, NoteInKeySettings> = {
+           settings.numberOfSegments === 1 && settings.numberOfVoices === 1,
+       }),
+       {
+-        key: 'resolveFlatThirdDirectly',
++        key: 'resolveMeAndRaDirectly',
+         show: (settings: NoteInKeySettings) =>
+           settings.numberOfSegments === 1 &&
+           settings.numberOfVoices === 1 &&
+           settings.playAfterCorrectAnswer,
+-        info: 'When checked, <b>Me</b> resolves directly down (Me Re Do). When unchecked and both <b>Me</b> and <b>Mi</b> are included, the resolution goes through Mi (Me Mi Re Do).',
++        info: 'When checked, <b>Me</b> resolves directly down (Me Re Do) and <b>Ra</b> resolves directly to Do (Ra Do), instead of going through Mi and Re.',
+         descriptor: {
+           controlType: 'checkbox',
+-          label: 'Resolve Me directly to Re',
++          label: 'Resolve Me and Ra directly',
++        },
++      },
++      {
++        key: 'resolveFiUp',
++        show: (settings: NoteInKeySettings) =>
++          settings.numberOfSegments === 1 &&
++          settings.numberOfVoices === 1 &&
++          settings.playAfterCorrectAnswer,
++        info: 'When checked, <b>Fi</b> resolves up to the high Do (Fi Sol La Ti Do) instead of down.',
++        descriptor: {
++          controlType: 'checkbox',
++          label: 'Resolve Fi up to high Do',
+         },
+       },
+     ],
+@@ -351,7 +365,8 @@ export const notesInKeyExercise: Exercise<SolfegeNote, NoteInKeySettings> = {
+                 ),
+                 settings.cadenceType,
+                 {
+-                  resolveFlatThirdDirectly: settings.resolveFlatThirdDirectly,
++                  resolveMeAndRaDirectly: settings.resolveMeAndRaDirectly,
++                  resolveFiUp: settings.resolveFiUp,
+                 },
+               );
+             const resolutionInNoteTypes: NoteType[] =
+@@ -367,8 +382,9 @@ export const notesInKeyExercise: Exercise<SolfegeNote, NoteInKeySettings> = {
+              * (It's not ideal that this needs to be done manually. We should reconsider this)
+              * */
+             if (
+-              getDiatonicScaleDegreeWithAccidental(scaleDegree)
+-                .diatonicScaleDegree >= 5
++              isResolutionUp(scaleDegree, {
++                resolveFiUp: settings.resolveFiUp,
++              })
+             ) {
+               resolution[resolution.length - 1] = transpose(
+                 resolution[resolution.length - 1],
+diff --git a/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.spec.ts b/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.spec.ts
+index a58c3eb..d92845b 100644
+--- a/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.spec.ts
++++ b/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.spec.ts
+@@ -1,5 +1,8 @@
+ import { testPureFunction } from '../../../../shared/testing-utility/testPureFunction';
+-import { getResolutionFromScaleDegree } from './getResolutionFromScaleDegree';
++import {
++  getResolutionFromScaleDegree,
++  isResolutionUp,
++} from './getResolutionFromScaleDegree';
+ 
+ /**
+  * General rules:
+@@ -32,7 +35,7 @@ describe('getResolutionFromScaleDegree', function () {
+         'b3',
+         ['1', '2', '3', 'b3'],
+         'I IV V I',
+-        { resolveFlatThirdDirectly: true },
++        { resolveMeAndRaDirectly: true },
+       ],
+       returnValue: ['b3', '2', '1'],
+     },
+@@ -41,7 +44,7 @@ describe('getResolutionFromScaleDegree', function () {
+         'b3',
+         ['1', '2', '3', 'b3'],
+         'i iv V i',
+-        { resolveFlatThirdDirectly: true },
++        { resolveMeAndRaDirectly: true },
+       ],
+       returnValue: ['b3', '2', '1'],
+     },
+@@ -50,9 +53,71 @@ describe('getResolutionFromScaleDegree', function () {
+         '3',
+         ['1', '2', '3', 'b3'],
+         'I IV V I',
+-        { resolveFlatThirdDirectly: true },
++        { resolveMeAndRaDirectly: true },
+       ],
+-      returnValue: ['3', '2', '1'], // only affects b3
++      returnValue: ['3', '2', '1'], // only affects b3 and b2
++    },
++    // Ra
++    {
++      args: ['b2', ['1', '2', 'b2'], 'I IV V I'],
++      returnValue: ['b2', '2', '1'],
++    },
++    {
++      args: [
++        'b2',
++        ['1', '2', 'b2'],
++        'I IV V I',
++        { resolveMeAndRaDirectly: true },
++      ],
++      returnValue: ['b2', '1'],
++    },
++    {
++      args: [
++        'b2',
++        ['1', 'b2', '3'],
++        'I IV V I',
++        { resolveMeAndRaDirectly: true },
++      ],
++      returnValue: ['b2', '1'], // without the option there's no resolution here
++    },
++    {
++      args: [
++        'b2',
++        ['1', '2', 'b3', '3', 'b2'],
++        'i iv V i',
++        { resolveMeAndRaDirectly: true },
++      ],
++      returnValue: ['b2', '1'],
++    },
++    {
++      args: [
++        '2',
++        ['1', '2', 'b2'],
++        'I IV V I',
++        { resolveMeAndRaDirectly: true },
++      ],
++      returnValue: ['2', '1'],
++    },
++    // Fi
++    {
++      args: ['#4', ['1', '#4'], 'I IV V I', { resolveFiUp: true }],
++      returnValue: ['#4', '5', '6', '7', '1'],
++    },
++    {
++      args: ['#4', ['1', '#4', '4'], 'I IV V I', { resolveFiUp: true }],
++      returnValue: ['#4', '5', '6', '7', '1'],
++    },
++    {
++      args: ['#4', ['1', '#4', 'b6'], 'i iv V i', { resolveFiUp: true }],
++      returnValue: ['#4', '5', 'b6', '7', '1'],
++    },
++    {
++      args: ['#4', ['1', '#4', 'b6', 'b7'], 'i iv V i', { resolveFiUp: true }],
++      returnValue: ['#4', '5', 'b6', 'b7', '1'],
++    },
++    {
++      args: ['4', ['1', '#4', '4'], 'I IV V I', { resolveFiUp: true }],
++      returnValue: ['4', '3', '2', '1'], // only affects #4
+     },
+     {
+       args: ['b3', ['1', '2', 'b3'], 'I IV V I'],
+@@ -120,3 +185,15 @@ describe('getResolutionFromScaleDegree', function () {
+     },
+   ]);
+ });
++
++describe('isResolutionUp', function () {
++  testPureFunction(isResolutionUp, [
++    { args: ['1'], returnValue: false },
++    { args: ['4'], returnValue: false },
++    { args: ['5'], returnValue: true },
++    { args: ['b7'], returnValue: true },
++    { args: ['#4'], returnValue: false },
++    { args: ['#4', { resolveFiUp: true }], returnValue: true },
++    { args: ['4', { resolveFiUp: true }], returnValue: false },
++  ]);
++});
+diff --git a/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.ts b/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.ts
+index 23dc828..d9dd699 100644
+--- a/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.ts
++++ b/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.ts
+@@ -59,19 +59,40 @@ const optionsForUpperHalf: DeepReadonly<ScaleOption[]> = [
+   },
+ ];
+ 
++export interface ResolutionOptions {
++  /**
++   * 'b3' (Me) resolves b3 -> 2 -> 1 instead of going through the natural 3 (b3 -> 3 -> 2 -> 1),
++   * and 'b2' (Ra) resolves b2 -> 1 instead of going through the natural 2 (b2 -> 2 -> 1)
++   * */
++  resolveMeAndRaDirectly?: boolean;
++  /**
++   * '#4' (Fi) resolves up to the high tonic (#4 -> 5 -> 6 -> 7 -> 1) instead of down
++   * */
++  resolveFiUp?: boolean;
++}
++
++/**
++ * Whether the resolution goes up (the last note should then be an octave above)
++ * */
++export function isResolutionUp(
++  scaleDegree: ScaleDegree,
++  { resolveFiUp = false }: ResolutionOptions = {},
++): boolean {
++  return (
++    getDiatonicScaleDegreeWithAccidental(scaleDegree).diatonicScaleDegree >=
++      5 ||
++    (resolveFiUp && scaleDegree === '#4')
++  );
++}
++
+ export function getResolutionFromScaleDegree(
+   scaleDegree: ScaleDegree,
+   includedNotes: ScaleDegree[],
+   cadenceType: CadenceType,
+   {
+-    /**
+-     * When true, 'b3' resolves directly down (b3 -> 2 -> 1) instead of
+-     * going through the natural 3 when both are included (b3 -> 3 -> 2 -> 1)
+-     * */
+-    resolveFlatThirdDirectly = false,
+-  }: {
+-    resolveFlatThirdDirectly?: boolean;
+-  } = {},
++    resolveMeAndRaDirectly = false,
++    resolveFiUp = false,
++  }: ResolutionOptions = {},
+ ): DeepReadonly<ScaleDegree[]> {
+   if (!includedNotes.includes(scaleDegree)) {
+     throw new Error(
+@@ -81,17 +102,20 @@ export function getResolutionFromScaleDegree(
+     );
+   }
+ 
+-  function getScale(): DeepReadonly<ScaleDegree[]> | null {
++  const defaultScaleOptions =
++    getDiatonicScaleDegreeWithAccidental(scaleDegree).diatonicScaleDegree < 5
++      ? optionsForBottomHalf
++      : optionsForUpperHalf;
++
++  function getScale(
++    scaleOptions: DeepReadonly<ScaleOption[]> = defaultScaleOptions,
++  ): DeepReadonly<ScaleDegree[]> | null {
+     const diatonicDegreeToIncludedNotes = _.groupBy(
+       includedNotes,
+       (includedNote) =>
+         getDiatonicScaleDegreeWithAccidental(includedNote).diatonicScaleDegree,
+     );
+-    const options =
+-      getDiatonicScaleDegreeWithAccidental(scaleDegree).diatonicScaleDegree < 5
+-        ? optionsForBottomHalf
+-        : optionsForUpperHalf;
+-    const optionsThatWorksWithIncludedNotes = options.filter((option) => {
++    const optionsThatWorksWithIncludedNotes = scaleOptions.filter((option) => {
+       return _.every(option.scale, (scaleDegreeInScaleCandidate) => {
+         const diatonicDegree: DiatonicScaleDegree =
+           getDiatonicScaleDegreeWithAccidental(
+@@ -113,7 +137,7 @@ export function getResolutionFromScaleDegree(
+     // If requested, prefer scales that contain the flat third itself,
+     // so the resolution doesn't detour through the natural third
+     const optionsContainingScaleDegree =
+-      resolveFlatThirdDirectly && scaleDegree === 'b3'
++      resolveMeAndRaDirectly && scaleDegree === 'b3'
+         ? optionsThatWorksWithIncludedNotes.filter((option) =>
+             option.scale.includes(scaleDegree),
+           )
+@@ -134,6 +158,18 @@ export function getResolutionFromScaleDegree(
+     return _.minBy(optionsThatWorkWithCadenceType, 'rating')!.scale; // we asserted it's not empty before
+   }
+ 
++  if (resolveMeAndRaDirectly && scaleDegree === 'b2') {
++    return ['b2', '1']; // doesn't depend on the scale, so also works when included notes conflict with it
++  }
++
++  if (resolveFiUp && scaleDegree === '#4') {
++    // same path as resolving the 5th, with the #4 in front
++    return [
++      '#4',
++      ...(getScale(optionsForUpperHalf) ?? optionsForUpperHalf[0].scale),
++    ];
++  }
++
+   const scale = getScale();
+   if (!scale) {
+     return [];

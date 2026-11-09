@@ -1,0 +1,135 @@
+diff --git a/src/app/exercise/exercises/NotesInKeyExercise/notesInKeyExercise.ts b/src/app/exercise/exercises/NotesInKeyExercise/notesInKeyExercise.ts
+index 209d8a0..aab144d 100644
+--- a/src/app/exercise/exercises/NotesInKeyExercise/notesInKeyExercise.ts
++++ b/src/app/exercise/exercises/NotesInKeyExercise/notesInKeyExercise.ts
+@@ -93,6 +93,7 @@ export type NoteInKeySettings = IncludedAnswersSettings<SolfegeNote> &
+   PlayAfterCorrectAnswerSetting &
+   CadenceTypeSetting & {
+     notesRange: 'high' | 'middle' | 'bass' | 'contrabass';
++    resolveFlatThirdDirectly: boolean;
+     numberOfVoices: 1 | 2 | 3;
+     harmonicIntervals: DiatonicIntervalCode[];
+     melodicIntervals: DiatonicIntervalCode[];
+@@ -138,6 +139,7 @@ export const notesInKeyExercise: Exercise<SolfegeNote, NoteInKeySettings> = {
+       numberOfSegments: 1,
+       numberOfVoices: 1,
+       playAfterCorrectAnswer: true,
++      resolveFlatThirdDirectly: false,
+       notesRange: 'middle',
+       displayMode: 'numeral',
+       rhythmicValues: ['2n'],
+@@ -239,6 +241,18 @@ export const notesInKeyExercise: Exercise<SolfegeNote, NoteInKeySettings> = {
+         show: (settings: NoteInKeySettings) =>
+           settings.numberOfSegments === 1 && settings.numberOfVoices === 1,
+       }),
++      {
++        key: 'resolveFlatThirdDirectly',
++        show: (settings: NoteInKeySettings) =>
++          settings.numberOfSegments === 1 &&
++          settings.numberOfVoices === 1 &&
++          settings.playAfterCorrectAnswer,
++        info: 'When checked, <b>Me</b> resolves directly down (Me Re Do). When unchecked and both <b>Me</b> and <b>Mi</b> are included, the resolution goes through Mi (Me Mi Re Do).',
++        descriptor: {
++          controlType: 'checkbox',
++          label: 'Resolve Me directly to Re',
++        },
++      },
+     ],
+   },
+   logic: (settings) => ({
+@@ -336,6 +350,9 @@ export const notesInKeyExercise: Exercise<SolfegeNote, NoteInKeySettings> = {
+                   (solfege) => solfegeNoteToScaleDegree[solfege],
+                 ),
+                 settings.cadenceType,
++                {
++                  resolveFlatThirdDirectly: settings.resolveFlatThirdDirectly,
++                },
+               );
+             const resolutionInNoteTypes: NoteType[] =
+               resolutionInScaleDegrees.map((scaleDegree) =>
+diff --git a/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.spec.ts b/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.spec.ts
+index 65c37c6..a58c3eb 100644
+--- a/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.spec.ts
++++ b/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.spec.ts
+@@ -27,6 +27,33 @@ describe('getResolutionFromScaleDegree', function () {
+       args: ['b3', ['1', '2', '3', 'b3'], 'I IV V I'],
+       returnValue: ['b3', '3', '2', '1'], // blues is implied
+     },
++    {
++      args: [
++        'b3',
++        ['1', '2', '3', 'b3'],
++        'I IV V I',
++        { resolveFlatThirdDirectly: true },
++      ],
++      returnValue: ['b3', '2', '1'],
++    },
++    {
++      args: [
++        'b3',
++        ['1', '2', '3', 'b3'],
++        'i iv V i',
++        { resolveFlatThirdDirectly: true },
++      ],
++      returnValue: ['b3', '2', '1'],
++    },
++    {
++      args: [
++        '3',
++        ['1', '2', '3', 'b3'],
++        'I IV V I',
++        { resolveFlatThirdDirectly: true },
++      ],
++      returnValue: ['3', '2', '1'], // only affects b3
++    },
+     {
+       args: ['b3', ['1', '2', 'b3'], 'I IV V I'],
+       returnValue: ['b3', '2', '1'], // minor is assumed since natural '3' is not included
+diff --git a/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.ts b/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.ts
+index c69387d..23dc828 100644
+--- a/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.ts
++++ b/src/app/exercise/utility/music/scale-degrees/getResolutionFromScaleDegree.ts
+@@ -63,6 +63,15 @@ export function getResolutionFromScaleDegree(
+   scaleDegree: ScaleDegree,
+   includedNotes: ScaleDegree[],
+   cadenceType: CadenceType,
++  {
++    /**
++     * When true, 'b3' resolves directly down (b3 -> 2 -> 1) instead of
++     * going through the natural 3 when both are included (b3 -> 3 -> 2 -> 1)
++     * */
++    resolveFlatThirdDirectly = false,
++  }: {
++    resolveFlatThirdDirectly?: boolean;
++  } = {},
+ ): DeepReadonly<ScaleDegree[]> {
+   if (!includedNotes.includes(scaleDegree)) {
+     throw new Error(
+@@ -101,13 +110,25 @@ export function getResolutionFromScaleDegree(
+       return null;
+     }
+ 
++    // If requested, prefer scales that contain the flat third itself,
++    // so the resolution doesn't detour through the natural third
++    const optionsContainingScaleDegree =
++      resolveFlatThirdDirectly && scaleDegree === 'b3'
++        ? optionsThatWorksWithIncludedNotes.filter((option) =>
++            option.scale.includes(scaleDegree),
++          )
++        : [];
++    const candidateOptions = optionsContainingScaleDegree.length
++      ? optionsContainingScaleDegree
++      : optionsThatWorksWithIncludedNotes;
++
+     const optionsThatWorkWithCadenceType: DeepReadonly<ScaleOption>[] =
+-      optionsThatWorksWithIncludedNotes.filter((option) =>
++      candidateOptions.filter((option) =>
+         cadenceType === 'I IV V I' ? option.isMajor : !option.isMajor,
+       );
+ 
+     if (_.isEmpty(optionsThatWorkWithCadenceType)) {
+-      optionsThatWorkWithCadenceType.push(...optionsThatWorksWithIncludedNotes); // ignoring cadence type if it contradicts
++      optionsThatWorkWithCadenceType.push(...candidateOptions); // ignoring cadence type if it contradicts
+     }
+ 
+     return _.minBy(optionsThatWorkWithCadenceType, 'rating')!.scale; // we asserted it's not empty before
